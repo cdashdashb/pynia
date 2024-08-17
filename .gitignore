@@ -1,0 +1,12 @@
+# Ignore python binaries
+*.pyc
+
+# Ignore swapfiles
+*.swp
+*.swo
+
+# Ignore ctags tags
+.tags
+
+# Compiled Javascript
+static/js/*.js
