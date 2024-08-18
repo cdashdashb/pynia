@@ -1,4 +1,4 @@
-Forked from https://github.com/kevinmershon/pynia, which was forked from http://code.google.com/p/pynia/, just made it work with python 3.12
+Forked from https://github.com/kevinmershon/pynia, which was forked from http://code.google.com/p/pynia/, just made it work with python 3.12 using Claude Sonnet 3.5.
 
 # pynia
 
