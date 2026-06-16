@@ -1,1 +1,15 @@
-SUBSYSTEM=="usb",ATTRS{idVendor}=="1234",GROUP="users"
+# udev rule for the OCZ Neural Impulse Actuator (NIA).
+#
+# The NIA enumerates as USB 1234:0000 ("Neural Impulse Actuator Prototype 1.0").
+# By default libusb has no read/write access to it, which shows up as an
+# "Access Denied" error. Install this file as, e.g.:
+#
+#     sudo cp udev/47-ocz-nia.rules /etc/udev/rules.d/
+#     sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# then unplug and replug the NIA.
+#
+# TAG+="uaccess" grants the locally-logged-in user access on modern systemd
+# systems. MODE/GROUP are kept as a fallback for systems without uaccess
+# (change GROUP to one your user belongs to, e.g. "plugdev").
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="0000", MODE="0660", GROUP="plugdev", TAG+="uaccess"

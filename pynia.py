@@ -1,31 +1,44 @@
-import pyglet
 import sys
-import threading
+
+import pyglet
+
 import nia as NIA
+
+# How often to refresh the display, in milliseconds. Acquisition now runs
+# continuously in the background, so this only controls the render cadence.
+UPDATE_INTERVAL_MS = 50
 
 # global scope stuff
 backgound = pyglet.image.load('static/images/pynia.png')
 step = pyglet.image.load('static/images/step.png')
 nia = None
+acquisition = None
 nia_data = None
+window = None
 
-def update(x):
-    """
-        The main pyglet loop. This function starts a data collection thread,
-        whilst processing and displying the previously collected data. At the
-        end of the loop the threads are joined
+
+def update(dt):
+    """Render one frame from the most recently acquired data.
+
+    The background acquisition thread keeps the rolling sample window full;
+    here we just fold in the new samples (pump) and draw. No per-frame thread
+    start/join, and no shared array mutated across threads.
     """
     window.clear()
 
-    # kick-off processing data from the NIA
-    data_thread = threading.Thread(target=nia_data.get_data)
-    data_thread.start()
+    # bail out if the acquisition thread has died (e.g. access denied / unplug)
+    if nia_data.AccessDeniedError:
+        pyglet.app.exit()
+        return
+
+    # fold newly acquired samples into the rolling window
+    nia_data.pump()
 
     # fill in the background image
     backgound.blit(0, 0)
 
     # get the fourier data from the NIA
-    data, steps = nia_data.fourier(nia_data)
+    data, steps = nia_data.fourier()
 
     # render an Intensity-based graph of the data
     image = pyglet.image.ImageData(160, 140, 'I', data)
@@ -34,7 +47,7 @@ def update(x):
     # render step scales of the 'brain-fingers'
     for i in range(6):  # this blits the brain-fingers blocks
         for j in range(int(steps[i])):
-            step.blit(i*50+100, j*15+200)
+            step.blit(i * 50 + 100, j * 15 + 200)
 
     # get a waveform of the last 1 second of data
     data = nia_data.waveform()
@@ -43,33 +56,27 @@ def update(x):
     image = pyglet.image.ImageData(410, 140, 'RGB', data)
     image.blit(210, 20)
 
-    # wait for the next batch of data to come in
-    data_thread.join()
-
-    # exit if we cannot read data from the device
-    if nia_data.AccessDeniedError:
-        sys.exit(1)
 
 if __name__ == "__main__":
-    """
-        The main function opens the NIA, creates a pyglet window, and then
-        enters the main pyglet loop (update). When the main pyglet loop exits,
-        the NIA is closed out and the programs exits successfully.
-    """
     # open the NIA, or exit with a failure code
     nia = NIA.NIA()
     if not nia.open():
         sys.exit(1)
 
-    # start collecting data
-    milliseconds = 50
-    nia_data = NIA.NiaData(nia, milliseconds)
+    # start the background acquisition (producer) thread
+    acquisition = NIA.NiaAcquisition(nia)
+    acquisition.start()
 
-    # open a window and schedule continuous updates
+    # the consumer/processor that the render loop reads from
+    nia_data = NIA.NiaData(nia, acquisition)
+
+    # open a window and schedule periodic updates
     window = pyglet.window.Window(caption="pyNIA")
-    pyglet.clock.schedule(update)
+    pyglet.clock.schedule_interval(update, UPDATE_INTERVAL_MS / 1000.0)
     pyglet.app.run()
 
-    # when pyglet exits, close out the NIA and exit gracefully
+    # when pyglet exits, stop acquisition, close out the NIA and exit
+    acquisition.stop()
+    acquisition.join(timeout=1.0)
     nia.close()
-    sys.exit(0)
+    sys.exit(1 if nia_data.AccessDeniedError else 0)

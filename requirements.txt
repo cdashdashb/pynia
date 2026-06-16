@@ -1,0 +1,16 @@
+# Core runtime dependencies (Python 3.10+)
+numpy>=1.26,<3
+pyusb>=1.2,<2          # PyUSB 1.x (usb.core / usb.util API)
+pyglet>=2.0           # pyglet GUI front-end (pynia.py)
+
+# Optional: higher-quality DSP path (NiaData(high_quality_dsp=True))
+# scipy>=1.11
+
+# Optional: web front-end (http.py). web.py is largely unmaintained; a future
+# pass should migrate http.py to Flask/FastAPI. Pin it only if you use http.py.
+# web.py>=0.62
+
+# NOTE: libusb is also required at the system level.
+#   * Windows: a libusb-1.0.dll is bundled in this repo (loaded automatically).
+#   * Linux:   install libusb-1.0-0 (e.g. `apt install libusb-1.0-0`).
+#   * macOS:   `brew install libusb`.

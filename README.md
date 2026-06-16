@@ -5,14 +5,46 @@
 - - -
 
 # Getting started
-## Dependencies
-* http://code.google.com/p/pyglet/
-* http://libusb.wiki.sourceforge.net/
-* http://sourceforge.net/projects/pyusb/
-* http://sourceforge.net/projects/numpy/
-* http://webpy.org/
+## Requirements
+* **Python 3.10+**
+* [NumPy](https://numpy.org/) (1.26+)
+* [PyUSB](https://github.com/pyusb/pyusb) **1.x** (uses the `usb.core` / `usb.util` API)
+* [pyglet](https://pyglet.org/) 2.x — for the pyglet GUI (`pynia.py`)
+* [libusb](https://libusb.info/) **1.0** at the system level
+* *(optional)* [SciPy](https://scipy.org/) — only for the higher-quality DSP path
+* *(optional)* [web.py](https://webpy.org/) — only for the HTTP front-end (`http.py`)
 
-On Mac it's simply enough to run `pip install pyglet pyusb numpy web.py`. On GNU/Linux I had to compile and install the libusb code. Also, see the [Troubleshooting - Access Denied section](#access-denied-warning-on-gnulinux).
+### Install
+```sh
+pip install -r requirements.txt        # numpy, pyusb, pyglet
+# optional extras:
+pip install scipy        # higher-quality DSP (see "DSP options" below)
+pip install web.py       # only if you want the http.py front-end
+```
+
+libusb itself:
+* **Windows** — a `libusb-1.0.dll` is bundled in this repo and loaded automatically; nothing else to install.
+* **GNU/Linux** — install `libusb-1.0-0` from your package manager (e.g. `sudo apt install libusb-1.0-0`). Also see the [Access Denied troubleshooting section](#access-denied-warning-on-gnulinux).
+* **macOS** — `brew install libusb`.
+
+> Note: `web.py` is largely unmaintained. `http.py` still uses it for now; a future pass should migrate it to Flask/FastAPI.
+
+## Finding your NIA's USB IDs
+The NIA enumerates as **`1234:0000`** ("Neural Impulse Actuator Prototype 1.0"). These IDs look like placeholders but are genuinely what the hardware reports, so the defaults usually just work. If your unit differs, find the real IDs:
+* **Linux** — `lsusb` and look for *Brain Actuated Technologies* / `1234:0000`.
+* **Windows** — Device Manager → the NIA device → Properties → Details → *Hardware Ids* (`USB\VID_1234&PID_0000`).
+
+Override the defaults without editing code via environment variables (decimal or `0x` hex):
+```sh
+NIA_VENDOR_ID=0x1234 NIA_PRODUCT_ID=0x0000 python pynia.py
+```
+or programmatically: `NIA.NIA(vendor_id=0x1234, product_id=0x0000)`.
+
+## DSP options
+The default DSP exactly reproduces the original visuals (brick-wall FFT filter and plain decimation). A cleaner, anti-aliased path (anti-aliased decimation + zero-phase Butterworth low-pass) is available behind a flag and requires SciPy:
+```python
+nia_data = NIA.NiaData(nia, acquisition, high_quality_dsp=True)
+```
 
 ## Usage
 There are two user interfaces for pyNIA: pyglet and HTML5.
@@ -39,12 +71,25 @@ had 2 fairly different versions of the code. I'm going to be developing
 primarily off the version **0.0.1** codebase because it required less
 modifications to make it functional, and it also has much better documentation.
 #### "Access Denied" warning on GNU/Linux
-By default, libusb doesn't provide read/write access to USB devices. In order to
-get **pynia** working on Linux without root privileges, you need to add an
-exception for the NIA to your udev rules in `/etc/udev/rules.d` (a sample file
-has been included in the `udev` folder of this repo), and then you need to run
-the command `udevadm control --reload-rules` to reload the rules. After that,
-unplug the NIA and plug it back in.
+By default, libusb has no read/write access to USB devices, so claiming the NIA
+fails with an *Access Denied* / `USBError`. To use **pynia** without root, add a
+udev rule for the NIA. A ready-to-use rule is in the `udev/` folder of this repo:
+
+```sh
+sudo cp udev/47-ocz-nia.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Then unplug the NIA and plug it back in.
+
+The shipped rule matches `idVendor==1234`, `idProduct==0000` and grants access
+via `TAG+="uaccess"` (works on modern systemd systems for the logged-in user),
+with a `MODE="0660"`/`GROUP="plugdev"` fallback — change the group to one your
+user belongs to (run `groups` to check) if `uaccess` isn't available.
+
+On Linux the kernel may bind its generic HID driver to the NIA first; the code
+detaches it automatically (`detach_kernel_driver`) before claiming the
+interface, so no manual unbinding is needed.
 
 # License #
 #### [MIT License](http://opensource.org/licenses/mit-license.php)
